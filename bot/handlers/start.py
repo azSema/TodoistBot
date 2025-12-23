@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -9,9 +9,17 @@ from bot.todoist_client import TodoistClient
 
 router = Router()
 
+TODOIST_TOKEN_URL = "https://todoist.com/prefs/integrations"
+
 
 class SetupStates(StatesGroup):
     waiting_for_token = State()
+
+
+def get_token_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Get API Token", url=TODOIST_TOKEN_URL)]
+    ])
 
 
 @router.message(Command("start"))
@@ -26,6 +34,7 @@ async def cmd_start(message: Message, state: FSMContext):
             "/week - tasks completed this week\n"
             "/month - tasks completed this month\n"
             "/pending - active tasks\n"
+            "/projects - list all projects\n"
             "/add <task> - add new task\n"
             "/setkey - change Todoist API key\n"
             "/help - show all commands"
@@ -34,11 +43,10 @@ async def cmd_start(message: Message, state: FSMContext):
         await message.answer(
             "Welcome to Todoist Report Bot!\n\n"
             "To get started, I need your Todoist API token.\n\n"
-            "How to get it:\n"
-            "1. Go to todoist.com/prefs/integrations\n"
+            "1. Click the button below\n"
             "2. Scroll down to 'API token'\n"
-            "3. Copy and send it to me\n\n"
-            "Send your API token now:"
+            "3. Copy and send it to me",
+            reply_markup=get_token_keyboard()
         )
         await state.set_state(SetupStates.waiting_for_token)
 
@@ -46,8 +54,9 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.message(Command("setkey"))
 async def cmd_setkey(message: Message, state: FSMContext):
     await message.answer(
-        "Send me your new Todoist API token.\n\n"
-        "Get it from: todoist.com/prefs/integrations"
+        "Click the button to get your new API token.\n"
+        "Then send it to me.",
+        reply_markup=get_token_keyboard()
     )
     await state.set_state(SetupStates.waiting_for_token)
 
@@ -83,9 +92,12 @@ async def cmd_help(message: Message):
         "Todoist Report Bot Commands:\n\n"
         "Reports:\n"
         "/today - tasks completed today\n"
+        "/today Work - today in project 'Work'\n"
         "/week - tasks completed this week\n"
+        "/week Personal - week in project 'Personal'\n"
         "/month - tasks completed this month\n"
-        "/pending - show active tasks\n\n"
+        "/pending - show active tasks\n"
+        "/projects - list all projects\n\n"
         "Task Management:\n"
         "/add <task> - add new task to Inbox\n\n"
         "Settings:\n"
