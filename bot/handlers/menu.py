@@ -88,9 +88,8 @@ async def cb_generate_report(callback: CallbackQuery):
         [InlineKeyboardButton(text="🏠 Меню", callback_data="menu:main")]
     ])
     
-    report_title = "📅 Дневной отчёт" if report_type == "daily" else "📆 Месячный отчёт"
-    
     await callback.message.edit_text(
-        f"{report_title}\n\n{ai_report}",
-        reply_markup=back_kb
+        ai_report,
+        reply_markup=back_kb,
+        parse_mode="HTML"
     )
