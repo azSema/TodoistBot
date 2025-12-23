@@ -1,11 +1,19 @@
 import aiohttp
-from typing import Optional
+from typing import Optional, List
 import os
 from datetime import datetime
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+
+EXCLUDE_PROJECTS = os.getenv("EXCLUDE_PROJECTS", "Inbox,Список желаний").split(",")
+
+
+def filter_work_tasks(tasks: list) -> list:
+    """Фильтрует задачи, исключая личные проекты"""
+    exclude = [p.strip().lower() for p in EXCLUDE_PROJECTS]
+    return [t for t in tasks if t.project_name.lower() not in exclude]
 
 DEFAULT_DAILY_PROMPT = """Сформируй дневной отчёт на основе списка задач. Используй ТОЧНО такой формат и стилистику:
 

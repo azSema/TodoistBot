@@ -27,20 +27,11 @@ async def cmd_start(message: Message, state: FSMContext):
     token = await get_user_token(message.from_user.id)
     
     if token:
-        from bot.handlers.base import get_client
         from bot.handlers.menu import main_menu_keyboard
-        
-        client = await get_client(message)
-        if client:
-            projects = await client.get_projects()
-            if projects:
-                await message.answer(
-                    "📊 Выбери проект для отчёта:",
-                    reply_markup=main_menu_keyboard(projects)
-                )
-                return
-        
-        await message.answer("Не удалось загрузить проекты. Попробуй /setkey")
+        await message.answer(
+            "📊 Отчёты по Todoist\n\nВыбери период:",
+            reply_markup=main_menu_keyboard()
+        )
     else:
         await message.answer(
             "👋 Привет! Это бот для отчётов по Todoist.\n\n"
@@ -78,15 +69,10 @@ async def process_token(message: Message, state: FSMContext):
         await state.clear()
         
         from bot.handlers.menu import main_menu_keyboard
-        projects = await client.get_projects()
-        
-        if projects:
-            await message.answer(
-                "✅ Готово! Выбери проект:",
-                reply_markup=main_menu_keyboard(projects)
-            )
-        else:
-            await message.answer("✅ Подключено! Создай проекты в Todoist и возвращайся.")
+        await message.answer(
+            "✅ Готово! Выбери период:",
+            reply_markup=main_menu_keyboard()
+        )
     else:
         await message.answer(
             "❌ Неверный токен. Проверь и попробуй снова.",
