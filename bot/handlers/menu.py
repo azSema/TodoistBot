@@ -3,10 +3,14 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from collections import defaultdict
 
 from bot.handlers.base import get_client, get_client_for_callback
+from bot.ai_reports import generate_report
 
 router = Router()
+
+tasks_cache = {}
 
 
 class AddTaskStates(StatesGroup):
@@ -41,6 +45,20 @@ def project_actions_keyboard(project_name: str):
         [InlineKeyboardButton(text="📅 Week", callback_data=f"project:week:{project_name}")],
         [InlineKeyboardButton(text="📆 Month", callback_data=f"project:month:{project_name}")],
         [InlineKeyboardButton(text="⬅️ Back", callback_data="menu:projects")]
+    ])
+
+
+def results_keyboard(period: str, project: str = ""):
+    project_suffix = f":{project}" if project else ""
+    
+    if period in ["today", "pending"]:
+        report_btn = InlineKeyboardButton(text="🤖 Сформировать отчёт за день", callback_data=f"ai:daily:{period}{project_suffix}")
+    else:
+        report_btn = InlineKeyboardButton(text="🤖 Сформировать отчёт за месяц", callback_data=f"ai:monthly:{period}{project_suffix}")
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [report_btn],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")]
     ])
 
 
@@ -112,11 +130,15 @@ async def cb_pending_all(callback: CallbackQuery):
     
     await callback.answer("Loading...")
     tasks = await client.get_active_tasks()
+    
+    user_id = callback.from_user.id
+    tasks_cache[user_id] = {"tasks": tasks, "period": "pending", "project": ""}
+    
     report = format_pending(tasks)
     
     await callback.message.edit_text(
         report,
-        reply_markup=back_to_menu_keyboard(),
+        reply_markup=results_keyboard("pending"),
         parse_mode="Markdown"
     )
 
@@ -129,11 +151,15 @@ async def cb_today_all(callback: CallbackQuery):
     
     await callback.answer("Loading...")
     tasks = await client.get_today_completed()
+    
+    user_id = callback.from_user.id
+    tasks_cache[user_id] = {"tasks": tasks, "period": "today", "project": ""}
+    
     report = format_completed(tasks, "today")
     
     await callback.message.edit_text(
         report,
-        reply_markup=back_to_menu_keyboard(),
+        reply_markup=results_keyboard("today"),
         parse_mode="Markdown"
     )
 
@@ -146,11 +172,15 @@ async def cb_week_all(callback: CallbackQuery):
     
     await callback.answer("Loading...")
     tasks = await client.get_week_completed()
+    
+    user_id = callback.from_user.id
+    tasks_cache[user_id] = {"tasks": tasks, "period": "week", "project": ""}
+    
     report = format_completed(tasks, "this week")
     
     await callback.message.edit_text(
         report,
-        reply_markup=back_to_menu_keyboard(),
+        reply_markup=results_keyboard("week"),
         parse_mode="Markdown"
     )
 
@@ -163,11 +193,15 @@ async def cb_month_all(callback: CallbackQuery):
     
     await callback.answer("Loading...")
     tasks = await client.get_month_completed()
+    
+    user_id = callback.from_user.id
+    tasks_cache[user_id] = {"tasks": tasks, "period": "month", "project": ""}
+    
     report = format_completed(tasks, "this month")
     
     await callback.message.edit_text(
         report,
-        reply_markup=back_to_menu_keyboard(),
+        reply_markup=results_keyboard("month"),
         parse_mode="Markdown"
     )
 
@@ -182,6 +216,9 @@ async def cb_project_action(callback: CallbackQuery):
     action = parts[1]
     project_name = parts[2]
     
+    if action == "select":
+        return
+    
     client = await get_client_for_callback(callback)
     if not client:
         return
@@ -192,29 +229,78 @@ async def cb_project_action(callback: CallbackQuery):
         tasks = await client.get_active_tasks()
         tasks = [t for t in tasks if t.project_name.lower() == project_name.lower()]
         report = format_pending(tasks, project_name)
+        period = "pending"
     elif action == "today":
         tasks = await client.get_today_completed()
         tasks = [t for t in tasks if t.project_name.lower() == project_name.lower()]
         report = format_completed(tasks, "today", project_name)
+        period = "today"
     elif action == "week":
         tasks = await client.get_week_completed()
         tasks = [t for t in tasks if t.project_name.lower() == project_name.lower()]
         report = format_completed(tasks, "this week", project_name)
+        period = "week"
     elif action == "month":
         tasks = await client.get_month_completed()
         tasks = [t for t in tasks if t.project_name.lower() == project_name.lower()]
         report = format_completed(tasks, "this month", project_name)
+        period = "month"
     else:
         await callback.answer("Unknown action")
         return
     
-    back_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Back to Project", callback_data=f"project:select:{project_name}")],
-        [InlineKeyboardButton(text="🏠 Main Menu", callback_data="menu:main")]
-    ])
+    user_id = callback.from_user.id
+    tasks_cache[user_id] = {"tasks": tasks, "period": period, "project": project_name}
     
     await callback.message.edit_text(
         report,
+        reply_markup=results_keyboard(period, project_name),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data.startswith("ai:"))
+async def cb_ai_report(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    report_type = parts[1]
+    
+    user_id = callback.from_user.id
+    cached = tasks_cache.get(user_id)
+    
+    if not cached or not cached.get("tasks"):
+        await callback.answer("Нет данных для отчёта", show_alert=True)
+        return
+    
+    await callback.answer("🤖 Генерирую отчёт...")
+    
+    await callback.message.edit_text(
+        "⏳ **Генерирую отчёт...**\n\nЭто займёт несколько секунд.",
+        parse_mode="Markdown"
+    )
+    
+    tasks = cached["tasks"]
+    tasks_text = "\n".join([f"- {t.content} (проект: {t.project_name})" for t in tasks])
+    
+    ai_report = await generate_report(tasks_text, report_type)
+    
+    if not ai_report:
+        await callback.message.edit_text(
+            "❌ **Не удалось сгенерировать отчёт**\n\n"
+            "Проверьте что `GEMINI_API_KEY` добавлен в переменные окружения Railway.",
+            reply_markup=back_to_menu_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
+    
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Сгенерировать заново", callback_data=callback.data)],
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu:main")]
+    ])
+    
+    report_title = "📅 Дневной отчёт" if report_type == "daily" else "📆 Месячный отчёт"
+    
+    await callback.message.edit_text(
+        f"🤖 **{report_title}**\n\n{ai_report}",
         reply_markup=back_kb,
         parse_mode="Markdown"
     )
@@ -230,7 +316,6 @@ def format_pending(tasks: list, project_name: str = None) -> str:
     
     lines = [f"{title}\n\nTotal: {len(tasks)}\n"]
     
-    from collections import defaultdict
     by_project = defaultdict(list)
     for task in tasks:
         by_project[task.project_name].append(task)
@@ -254,7 +339,6 @@ def format_completed(tasks: list, period: str, project_name: str = None) -> str:
     
     lines = [f"{title}\n\nTotal: {len(tasks)}\n"]
     
-    from collections import defaultdict
     by_project = defaultdict(list)
     for task in tasks:
         by_project[task.project_name].append(task)
