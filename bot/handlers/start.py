@@ -18,7 +18,18 @@ class SetupStates(StatesGroup):
 
 def get_token_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Get API Token", url=TODOIST_TOKEN_URL)]
+        [InlineKeyboardButton(text="🔑 Get API Token", url=TODOIST_TOKEN_URL)]
+    ])
+
+
+def main_menu_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Active Tasks", callback_data="menu:pending")],
+        [InlineKeyboardButton(text="✅ Completed Today", callback_data="menu:today")],
+        [InlineKeyboardButton(text="📅 This Week", callback_data="menu:week")],
+        [InlineKeyboardButton(text="📆 This Month", callback_data="menu:month")],
+        [InlineKeyboardButton(text="📁 By Project", callback_data="menu:projects")],
+        [InlineKeyboardButton(text="➕ Add Task", callback_data="menu:add_task")]
     ])
 
 
@@ -28,25 +39,21 @@ async def cmd_start(message: Message, state: FSMContext):
     
     if token:
         await message.answer(
-            "Welcome back! Your Todoist is already connected.\n\n"
-            "Commands:\n"
-            "/today - tasks completed today\n"
-            "/week - tasks completed this week\n"
-            "/month - tasks completed this month\n"
-            "/pending - active tasks\n"
-            "/projects - list all projects\n"
-            "/add <task> - add new task\n"
-            "/setkey - change Todoist API key\n"
-            "/help - show all commands"
+            "📊 **Todoist Dashboard**\n\n"
+            "Choose an option below or use commands:\n"
+            "`/today` `/week` `/month` `/pending` `/add`",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="Markdown"
         )
     else:
         await message.answer(
-            "Welcome to Todoist Report Bot!\n\n"
+            "👋 **Welcome to Todoist Report Bot!**\n\n"
             "To get started, I need your Todoist API token.\n\n"
-            "1. Click the button below\n"
-            "2. Scroll down to 'API token'\n"
-            "3. Copy and send it to me",
-            reply_markup=get_token_keyboard()
+            "1️⃣ Click the button below\n"
+            "2️⃣ Scroll down to 'API token'\n"
+            "3️⃣ Copy and send it here",
+            reply_markup=get_token_keyboard(),
+            parse_mode="Markdown"
         )
         await state.set_state(SetupStates.waiting_for_token)
 
@@ -54,7 +61,7 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.message(Command("setkey"))
 async def cmd_setkey(message: Message, state: FSMContext):
     await message.answer(
-        "Click the button to get your new API token.\n"
+        "🔑 Click the button to get your API token.\n"
         "Then send it to me.",
         reply_markup=get_token_keyboard()
     )
@@ -66,41 +73,45 @@ async def process_token(message: Message, state: FSMContext):
     token = message.text.strip()
     
     if len(token) < 20:
-        await message.answer("This doesn't look like a valid token. Please try again.")
+        await message.answer("❌ This doesn't look like a valid token. Please try again.")
         return
     
-    await message.answer("Verifying your token...")
+    await message.answer("🔄 Verifying your token...")
     
     client = TodoistClient(token)
     if await client.verify_token():
         await save_user_token(message.from_user.id, token)
         await state.clear()
         await message.answer(
-            "Success! Your Todoist account is now connected.\n\n"
-            "Try /today to see what you've completed today!"
+            "✅ **Success!** Your Todoist account is connected.\n\n"
+            "Choose an option:",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="Markdown"
         )
     else:
         await message.answer(
-            "Invalid token. Please check and try again.\n"
-            "Make sure you copied the full token from todoist.com/prefs/integrations"
+            "❌ Invalid token. Please check and try again.\n"
+            "Make sure you copied the full token.",
+            reply_markup=get_token_keyboard()
         )
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     await message.answer(
-        "Todoist Report Bot Commands:\n\n"
-        "Reports:\n"
-        "/today - tasks completed today\n"
-        "/today Work - today in project 'Work'\n"
-        "/week - tasks completed this week\n"
-        "/week Personal - week in project 'Personal'\n"
-        "/month - tasks completed this month\n"
-        "/pending - show active tasks\n"
-        "/projects - list all projects\n\n"
-        "Task Management:\n"
-        "/add <task> - add new task to Inbox\n\n"
-        "Settings:\n"
-        "/setkey - change your Todoist API key\n"
-        "/help - show this message"
+        "📖 **Todoist Report Bot**\n\n"
+        "**Interactive Menu:**\n"
+        "/start - Open dashboard with buttons\n\n"
+        "**Text Commands:**\n"
+        "/today - Completed today\n"
+        "/today Work - Today in 'Work' project\n"
+        "/week - Completed this week\n"
+        "/month - Completed this month\n"
+        "/pending - Active tasks\n"
+        "/projects - List all projects\n"
+        "/add <task> - Add new task\n\n"
+        "**Settings:**\n"
+        "/setkey - Change API key\n"
+        "/help - This message",
+        parse_mode="Markdown"
     )
