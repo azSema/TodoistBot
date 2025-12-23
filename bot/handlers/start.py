@@ -9,7 +9,8 @@ from bot.todoist_client import TodoistClient
 
 router = Router()
 
-TODOIST_TOKEN_URL = "https://todoist.com/prefs/integrations"
+TODOIST_TOKEN_URL = "todoist://settings/integrations/developer"
+TODOIST_TOKEN_URL_WEB = "https://app.todoist.com/app/settings/integrations/developer"
 
 
 class SetupStates(StatesGroup):
@@ -18,7 +19,8 @@ class SetupStates(StatesGroup):
 
 def get_token_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Get API Token", url=TODOIST_TOKEN_URL)]
+        [InlineKeyboardButton(text="Open Todoist App", url=TODOIST_TOKEN_URL)],
+        [InlineKeyboardButton(text="Open in Browser", url=TODOIST_TOKEN_URL_WEB)]
     ])
 
 
